@@ -1,0 +1,112 @@
+{{ bairros_sugeridos|json_script:"bairros-sugeridos" }}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAAE - Bairro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+    <style>
+        :root { --saae-blue: #004b87; --saae-light: #009FE3; --saae-accent: #f8f9fa; }
+        body { background-color: var(--saae-accent); font-family: 'Segoe UI', sans-serif; }
+        .navbar-saae { background: linear-gradient(90deg, var(--saae-blue) 0%, var(--saae-light) 100%); }
+        #mapa-selecao { height: 280px; border-radius: 8px; margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark navbar-saae mb-4 py-3">
+    <div class="container">
+        <a class="navbar-brand" href="{% url 'dashboard' %}"><i class="fa-solid fa-droplet me-2"></i>SAAE Monitoramento</a>
+    </div>
+</nav>
+
+<div class="container" style="max-width: 600px;">
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+            <h4 class="fw-bold mb-3" style="color: var(--saae-blue);">
+                {% if object %}Editar Bairro{% else %}Novo Bairro{% endif %}
+            </h4>
+
+            <p class="text-muted small mb-2">
+                Clique no mapa pra marcar a localização do bairro — a latitude e a longitude são preenchidas automaticamente.
+            </p>
+            <div id="mapa-selecao"></div>
+
+            <datalist id="lista-bairros-sugeridos"></datalist>
+
+            <form method="post">
+                {% csrf_token %}
+                {{ form.as_p }}
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <a href="{% url 'bairro_list' %}" class="btn btn-outline-secondary">Cancelar</a>
+                    <button type="submit" class="btn btn-success fw-bold">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+    const bairrosSugeridos = JSON.parse(document.getElementById('bairros-sugeridos').textContent);
+
+    // Preenche o <datalist> com os nomes conhecidos de bairros de Juazeiro-BA
+    const listaSugestoes = document.getElementById('lista-bairros-sugeridos');
+    bairrosSugeridos.forEach(function (bairro) {
+        const opcao = document.createElement('option');
+        opcao.value = bairro.nome;
+        listaSugestoes.appendChild(opcao);
+    });
+
+    const campoLatitude = document.getElementById('id_latitude');
+    const campoLongitude = document.getElementById('id_longitude');
+    const campoNome = document.getElementById('id_nome');
+
+    // Centro do mapa: usa a coordenada já salva do bairro (edição) ou o centro de Juazeiro-BA
+    const posicaoInicial = (campoLatitude.value && campoLongitude.value)
+        ? [parseFloat(campoLatitude.value), parseFloat(campoLongitude.value)]
+        : [-9.4130585, -40.5024376];
+
+    const mapa = L.map('mapa-selecao').setView(posicaoInicial, 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(mapa);
+
+    let marcador = null;
+    function posicionarMarcador(lat, lng) {
+        if (marcador) {
+            mapa.removeLayer(marcador);
+        }
+        marcador = L.marker([lat, lng]).addTo(mapa);
+    }
+
+    if (campoLatitude.value && campoLongitude.value) {
+        posicionarMarcador(posicaoInicial[0], posicaoInicial[1]);
+    }
+
+    // Clicar no mapa preenche latitude/longitude sem precisar digitar
+    mapa.on('click', function (evento) {
+        const lat = evento.latlng.lat.toFixed(6);
+        const lng = evento.latlng.lng.toFixed(6);
+        campoLatitude.value = lat;
+        campoLongitude.value = lng;
+        posicionarMarcador(lat, lng);
+    });
+
+    // Ao escolher um nome sugerido, centraliza o mapa e preenche as coordenadas dele
+    campoNome.addEventListener('input', function (evento) {
+        const sugestao = bairrosSugeridos.find(b => b.nome === evento.target.value);
+        if (sugestao) {
+            campoLatitude.value = sugestao.latitude;
+            campoLongitude.value = sugestao.longitude;
+            mapa.setView([sugestao.latitude, sugestao.longitude], 15);
+            posicionarMarcador(sugestao.latitude, sugestao.longitude);
+        }
+    });
+</script>
+</body>
+</html>
